@@ -1,6 +1,7 @@
 # Dane użytkownika (prywatne)
 history.csv
 BM_Report_*.pdf
+settings.json
 
 # Artefakty budowania
 build/

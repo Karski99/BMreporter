@@ -2,10 +2,11 @@
 
 A desktop app for gut health monitoring — a bowel movement diary based on the **Bristol Stool Scale**, with entry history, statistics, charts, and PDF report export.
 
-Polish-language UI, built with CustomTkinter (modern look, light/dark mode following the system theme).
+Polish and English UI with a **language switcher** (top-right; the choice is persisted in `settings.json`), built with CustomTkinter (modern look, light/dark mode following the system theme). PDF reports follow the selected language. Tag values are stored canonically in Polish in `history.csv` for compatibility and displayed in the active language.
 
 ## Features
 
+- **Language switcher** — full Polish/English UI (top-right selector); the choice is persisted in `settings.json` and the whole interface rebuilds instantly. PDF reports follow the selected language.
 - **Add Entry** — date and time (defaulting to now) chosen via a **popup calendar** and a **digital clock picker** (large HH:MM display with up/down steppers and sliders, "now" shortcut), **graphical Bristol scale selector** (7 illustrated, clickable thumbnails with a live description of the selected type), **symptom/factor tags** (13 presets: abdominal pain, bloating, blood, mucus, nausea, stress, alcohol, coffee, spicy meal, dairy, fast food, medication, soiling episodes), free-form description/notes.
 - **History** — entry list sorted newest first, with **edit** and **delete** (with confirmation), plus Bristol scale **and tag filters**. Tags are shown on each entry.
 - **Statistics** — average scale, most frequent value, entry count, **% of optimal entries (types 3–4)** and the **trend vs the previous period** (percentage points, color-coded) for the last **7 or 30 days**.
@@ -13,7 +14,7 @@ Polish-language UI, built with CustomTkinter (modern look, light/dark mode follo
 - **Analysis** — regularity (median gap between entries, longest gap, time since last entry with a ≥3-day warning), **episode detection** (diarrhea: ≥3 entries of type 6–7 within 24 h; possible constipation: gaps ≥3 days), and **time-of-day patterns** (entries-per-hour histogram + average scale by night/morning/afternoon/evening). Range: 7/30 days or all time.
 - **Calendar** — monthly **heatmap**: each day colored by its average Bristol scale (green = optimal 3–4, yellow/orange/red = increasing deviation), entry counters on busy days, month navigation, per-month summary, and a click-to-view day detail (times, types, tags).
 - **Charts** (matplotlib) — daily entry count and Bristol scale distribution for a selected range (7/30 days).
-- **PDF export** (reportlab) — multi-section report with a **selectable date range** (whole history, last 7/30 days, or a custom from–to range via calendar pickers): summary (counts, averages, % optimal, trend vs previous period), Bristol scale legend, history table with tags, tag correlations, analysis (regularity, detected episodes, time-of-day), and monthly calendar heatmaps. Polish diacritics support (DejaVu Sans / Arial).
+- **PDF export** (reportlab) — multi-section report with a **selectable date range** (whole history, last 7/30 days, or a custom from–to range via calendar pickers): summary (counts, averages, % optimal, trend vs previous period), Bristol scale legend, history table with tags, tag correlations, analysis (regularity, detected episodes, time-of-day), and monthly calendar heatmaps. Generated in the selected UI language (Polish/English), with diacritics-capable fonts (DejaVu Sans / Arial).
 
 ### Bristol Stool Scale
 
@@ -60,9 +61,11 @@ Entries are saved to **`history.csv`** (UTF-8, header: `Data, Godzina, Skala Bri
 - when run from the script — next to `bm_reporter.py`,
 - when run from the `.exe` — next to the executable (not in the temporary extraction directory).
 
-The file is created automatically on first launch. Files in the older 4-column format (without `Tagi`) are read seamlessly and upgraded to the new header on the next save/edit/delete.
+The file is created automatically on first launch. Files in the older 4-column format (without `Tagi`) are read seamlessly and upgraded to the new header on the next save/edit/delete. Tag values are stored canonically in Polish (for backward compatibility) and displayed in the active UI language.
 
-> **Privacy:** `history.csv` and generated PDF reports are private health data — they are excluded from the repository via `.gitignore` and are never uploaded anywhere. All data stays local on your computer.
+The UI language preference is saved to **`settings.json`** (next to the script/executable, default: Polish).
+
+> **Privacy:** `history.csv`, generated PDF reports and `settings.json` are local-only — excluded from the repository via `.gitignore` and never uploaded anywhere. All data stays on your computer.
 
 ## Project structure
 
