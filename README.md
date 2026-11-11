@@ -1,81 +1,81 @@
 # BM Reporter
 
-Desktopowa aplikacja do monitorowania zdrowia jelit — dziennik wypróżnień oparty na **skali Bristol**, z historią wpisów, statystykami, wykresami i eksportem raportu do PDF.
+A desktop app for gut health monitoring — a bowel movement diary based on the **Bristol Stool Scale**, with entry history, statistics, charts, and PDF report export.
 
-Interfejs w języku polskim, zbudowany w CustomTkinter (nowoczesny wygląd, tryb jasny/ciemny zgodny z systemem).
+Polish-language UI, built with CustomTkinter (modern look, light/dark mode following the system theme).
 
-## Funkcje
+## Features
 
-- **Dodaj Wpis** — data i godzina (domyślnie bieżące), konsystencja w skali Bristol (1–7), dowolny opis/uwagi. Walidacja formatów daty (`RRRR-MM-DD`) i godziny (`HH:MM`).
-- **Historia** — lista wpisów sortowana od najnowszych, z możliwością **edycji** i **usuwania** (z potwierdzeniem) oraz filtrem po skali Bristol.
-- **Statystyki** — średnia skala, najczęstsza wartość i liczba wpisów z ostatnich **7 lub 30 dni**.
-- **Wykresy** (matplotlib) — liczba wpisów dziennie oraz rozkład skali Bristol w wybranym zakresie (7/30 dni).
-- **Eksport do PDF** (reportlab) — raport z pełną historią w formie tabeli, z obsługą polskich znaków (DejaVu Sans / Arial).
+- **Add Entry** — date and time (defaulting to now), Bristol scale consistency (1–7), free-form description/notes. Validation of date (`YYYY-MM-DD`) and time (`HH:MM`) formats.
+- **History** — entry list sorted newest first, with **edit** and **delete** (with confirmation) and a Bristol scale filter.
+- **Statistics** — average scale, most frequent value, and entry count for the last **7 or 30 days**.
+- **Charts** (matplotlib) — daily entry count and Bristol scale distribution for a selected range (7/30 days).
+- **PDF export** (reportlab) — full-history report as a table, with Polish diacritics support (DejaVu Sans / Arial).
 
-### Skala Bristol
+### Bristol Stool Scale
 
-| Typ | Opis |
-|-----|------|
-| 1 | Twarde grudki |
-| 2 | Kiełbaskowaty, grudkowaty |
-| 3 | Kiełbaskowaty z pęknięciami |
-| 4 | Miękki, gładki kawałek (optymalny) |
-| 5 | Miękkie kawałki z brzegami |
-| 6 | Puszysty, nierówny |
-| 7 | Płynny |
+| Type | Description |
+|------|-------------|
+| 1 | Separate hard lumps |
+| 2 | Sausage-shaped, lumpy |
+| 3 | Sausage-shaped with cracks |
+| 4 | Smooth, soft sausage (optimal) |
+| 5 | Soft blobs with clear edges |
+| 6 | Fluffy, ragged pieces |
+| 7 | Entirely liquid |
 
-## Wymagania
+## Requirements
 
 - Python 3.10+
-- Biblioteki:
+- Dependencies:
 
 ```bash
 pip install customtkinter matplotlib reportlab
 ```
 
-> `matplotlib` i `reportlab` są opcjonalne — bez nich aplikacja działa, ale zakładka „Wykresy" i eksport PDF są wyłączone.
+> `matplotlib` and `reportlab` are optional — the app runs without them, but the "Charts" tab and PDF export are disabled.
 
-## Uruchomienie
+## Running
 
 ```bash
 python bm_reporter.py
 ```
 
-## Budowanie wersji .exe (Windows)
+## Building the .exe (Windows)
 
 ```bash
 pip install pyinstaller
 pyinstaller BMReporter.spec
 ```
 
-Plik `BMReporter.exe` pojawi się w katalogu `dist/`. Aplikacja jest okienkowa (bez konsoli), z ikoną `icons/app.ico`.
+The `BMReporter.exe` file will appear in the `dist/` directory. The app is windowed (no console), with the `icons/app.ico` icon.
 
-## Przechowywanie danych
+## Data storage
 
-Wpisy zapisywane są w pliku **`history.csv`** (UTF-8, nagłówek: `Data, Godzina, Skala Bristol, Opis`):
+Entries are saved to **`history.csv`** (UTF-8, header: `Data, Godzina, Skala Bristol, Opis` — i.e. date, time, Bristol scale, description):
 
-- przy uruchomieniu ze skryptu — obok `bm_reporter.py`,
-- przy uruchomieniu z `.exe` — obok pliku wykonywalnego (nie w katalogu tymczasowym rozpakowania).
+- when run from the script — next to `bm_reporter.py`,
+- when run from the `.exe` — next to the executable (not in the temporary extraction directory).
 
-Plik tworzony jest automatycznie przy pierwszym uruchomieniu.
+The file is created automatically on first launch.
 
-> **Prywatność:** `history.csv` oraz wygenerowane raporty PDF to prywatne dane zdrowotne — są wykluczone z repozytorium przez `.gitignore` i nigdzie nie są wysyłane. Wszystkie dane pozostają lokalnie na Twoim komputerze.
+> **Privacy:** `history.csv` and generated PDF reports are private health data — they are excluded from the repository via `.gitignore` and are never uploaded anywhere. All data stays local on your computer.
 
-## Struktura projektu
+## Project structure
 
 ```
-├── bm_reporter.py        # cała aplikacja (GUI + logika + CSV + PDF)
-├── BMReporter.spec       # konfiguracja PyInstaller (wersja .exe)
+├── bm_reporter.py        # the whole app (GUI + logic + CSV + PDF)
+├── BMReporter.spec       # PyInstaller configuration (.exe build)
 ├── icons/
-│   ├── app.ico           # ikona aplikacji
-│   ├── generate_icons.py # skrypt generujący ikony (PIL)
-│   └── propozycja-*.png  # alternatywne projekty ikony
+│   ├── app.ico           # application icon
+│   ├── generate_icons.py # icon generation script (PIL)
+│   └── propozycja-*.png  # alternative icon designs
 └── .gitignore
 ```
 
-## Technologie
+## Tech stack
 
 - [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) — GUI
-- [matplotlib](https://matplotlib.org/) — wykresy
-- [ReportLab](https://www.reportlab.com/) — generowanie PDF
-- [PyInstaller](https://pyinstaller.org/) — pakowanie do `.exe`
+- [matplotlib](https://matplotlib.org/) — charts
+- [ReportLab](https://www.reportlab.com/) — PDF generation
+- [PyInstaller](https://pyinstaller.org/) — packaging into `.exe`
