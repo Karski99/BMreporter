@@ -1,0 +1,10 @@
+# Dane użytkownika (prywatne)
+history.csv
+BM_Report_*.pdf
+
+# Artefakty budowania
+build/
+dist/
+__pycache__/
+*.exe
+*.pyc
