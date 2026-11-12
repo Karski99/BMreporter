@@ -51,6 +51,7 @@ def resource_path(relative):
 DATE_FMT = "%Y-%m-%d"
 TIME_FMT = "%H:%M"
 CSV_HEADER = ["Data", "Godzina", "Skala Bristol", "Opis", "Tagi"]
+APP_VERSION = "0.8"
 TAGS = ["Ból brzucha", "Wzdęcia", "Krew", "Śluz", "Nudności", "Stres",
         "Alkohol", "Kawa", "Ostry posiłek", "Nabiał", "Fast food", "Leki",
         "Epizod brudzenia bielizny"]
@@ -599,8 +600,12 @@ class BMReporter(ctk.CTk):
         ctk.CTkLabel(self.lang_frame, text=tr("language_label"), font=ctk.CTkFont(size=11)
                      ).pack(side="right", padx=(0, 6))
 
+        self.footer = ctk.CTkLabel(self, text=f"v{APP_VERSION}", font=ctk.CTkFont(size=10),
+                                   text_color=("gray40", "gray60"))
+        self.footer.pack(side="bottom", pady=(0, 4))
+
         self.tabview = ctk.CTkTabview(self, command=self.on_tab_change)
-        self.tabview.pack(padx=20, pady=(10, 20), fill="both", expand=True)
+        self.tabview.pack(padx=20, pady=(10, 5), fill="both", expand=True)
 
         self.tab_add = self.tabview.add(tr("tab_add"))
         self.tab_history = self.tabview.add(tr("tab_history"))
@@ -626,6 +631,7 @@ class BMReporter(ctk.CTk):
         self.edit_index = None
         self.lang_frame.destroy()
         self.tabview.destroy()
+        self.footer.destroy()
         self._build_ui()
 
     # --- Dostęp do danych ---
