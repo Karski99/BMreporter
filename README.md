@@ -11,22 +11,22 @@ Polish and English UI with a **language switcher** (top-right; the choice is per
 - **History** — entry list sorted newest first, with **edit** and **delete** (with confirmation), plus Bristol scale **and tag filters**. Tags are shown on each entry.
 - **Statistics** — average scale, most frequent value, entry count, **% of optimal entries (types 3–4)** and the **trend vs the previous period** (percentage points, color-coded) for the last **7 or 30 days**.
 - **Correlations** — per-tag table: entry count, average Bristol scale **with vs. without** the tag, and the difference (positive = looser stool, negative = harder). Range: 7/30 days or all time. Samples under 3 entries are flagged as unreliable.
-- **Analysis** — regularity (median gap between entries, longest gap, time since last entry with a ≥3-day warning), **episode detection** (diarrhea: ≥3 entries of type 6–7 within 24 h; possible constipation: gaps ≥3 days), and **time-of-day patterns** (entries-per-hour histogram + average scale by night/morning/afternoon/evening). Range: 7/30 days or all time.
+- **Analysis** (scrollable) — regularity (median gap between entries, longest gap, time since last entry with a ≥3-day warning), **episode detection** (diarrhea: ≥3 entries of type 6–7 within 24 h; possible constipation: gaps ≥3 days), **time-of-day patterns** (entries-per-hour histogram + average scale by night/morning/afternoon/evening), **7-day moving-average trend** with the optimal 3–4 band, **weekday rhythm** (average scale per weekday, heat-colored), **episode/gap timeline** (bars on a date axis), **tag co-occurrence** (tag pairs counted within the same entry), and **rule-based insights** (tag effects, week-over-week changes in % optimal and average, episodes, long gaps, share of extreme entries). Range: 7/30 days or all time.
 - **Calendar** — monthly **heatmap**: each day colored by its average Bristol scale (green = optimal 3–4, yellow/orange/red = increasing deviation), entry counters on busy days, month navigation, per-month summary, and a click-to-view day detail (times, types, tags).
-- **Charts** (matplotlib) — daily entry count and Bristol scale distribution for a selected range (7/30 days).
-- **PDF export** (reportlab) — multi-section report with a **selectable date range** (whole history, last 7/30 days, or a custom from–to range via calendar pickers): summary (counts, averages, % optimal, trend vs previous period), Bristol scale legend, history table with tags, tag correlations, analysis (regularity, detected episodes, time-of-day), and monthly calendar heatmaps. Generated in the selected UI language (Polish/English), with diacritics-capable fonts (DejaVu Sans / Arial).
+- **Charts** (matplotlib) — four panels for the selected range (7/30 days): daily entry count with diarrhea-episode days highlighted in red, Bristol scale distribution, daily average scale with the optimal 3–4 band, and a tag-correlation bar chart (difference of averages).
+- **PDF export** (reportlab) — multi-section report with a **selectable date range** (whole history, last 7/30 days, or a custom from–to range via calendar pickers): summary (counts, averages, % optimal, trend vs previous period), Bristol scale legend, history table with tags, tag correlations, analysis (regularity, detected episodes, time-of-day, week-vs-week comparison, weekday rhythm table, embedded 7-day trend chart, tag co-occurrence table, episode/gap timeline chart, rule-based insights), and monthly calendar heatmaps. Generated in the selected UI language (Polish/English), with diacritics-capable fonts (DejaVu Sans / Arial).
 
 ### Bristol Stool Scale
 
 | Type | Description |
 |------|-------------|
-| 1 | Separate hard lumps, nut-like, difficult to pass |
-| 2 | Elongated, lumpy stool |
-| 3 | Elongated stool with cracks on the surface |
-| 4 | Smooth, soft, snake-like pieces (optimal) |
-| 5 | Soft small pieces with clear edges (easy to pass) |
-| 6 | Mushy stool, fluffy pieces with ragged edges |
-| 7 | Watery, no solid pieces (liquid) |
+| 1 | Separate hard lumps, like nuts (difficult to pass) |
+| 2 | Sausage-shaped, but lumpy |
+| 3 | Like a sausage but with cracks on its surface |
+| 4 | Like a sausage or snake, smooth and soft (average stool) |
+| 5 | Soft blobs with clear cut edges |
+| 6 | Fluffy pieces with ragged edges, a mushy stool (diarrhoea) |
+| 7 | Watery, no solid pieces, entirely liquid (diarrhoea) |
 
 ## Requirements
 

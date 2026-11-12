@@ -6,6 +6,7 @@ import json
 import os
 import sys
 import calendar
+import tempfile
 from collections import Counter
 from datetime import datetime, timedelta
 from xml.sax.saxutils import escape
@@ -15,6 +16,8 @@ try:
     from matplotlib.figure import Figure
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
     import matplotlib.ticker as mticker
+    import matplotlib.dates as mdates
+    from matplotlib.patches import Patch
     MATPLOTLIB_AVAILABLE = True
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
@@ -23,7 +26,7 @@ try:
     from reportlab.lib.pagesizes import letter
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image as RLImage
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
     PDF_AVAILABLE = True
@@ -147,6 +150,53 @@ STRINGS = {
                     "en": "No episodes detected in the selected range."},
     "chart_hours": {"pl": "Wpisy wg godziny", "en": "Entries by hour"},
     "chart_daypart": {"pl": "Śr. skala wg pory dnia", "en": "Avg scale by time of day"},
+    "chart_avg": {"pl": "Śr. skala dziennie (pasmo 3–4)", "en": "Daily avg scale (3–4 band)"},
+    "chart_corr": {"pl": "Korelacje tagów (różnica)", "en": "Tag correlations (difference)"},
+    "episode_day": {"pl": "Dzień z epizodem biegunki", "en": "Diarrhea episode day"},
+    "diff_axis": {"pl": "Różnica", "en": "Difference"},
+    "chart_trend": {"pl": "Trend: średnia krocząca 7 dni", "en": "Trend: 7-day moving average"},
+    "chart_weekday": {"pl": "Śr. skala wg dnia tygodnia", "en": "Avg scale by weekday"},
+    "insights_title": {"pl": "Wnioski:", "en": "Insights:"},
+    "ins_none": {"pl": "Brak istotnych obserwacji w wybranym zakresie.",
+                 "en": "No notable observations in the selected range."},
+    "ins_tag_high": {"pl": "Przy tagu {tag} średnia skala jest o {d:.1f} wyższa (luźniejszy stolec), n={n}",
+                     "en": "With tag {tag} the average scale is {d:.1f} higher (looser stool), n={n}"},
+    "ins_tag_low": {"pl": "Przy tagu {tag} średnia skala jest o {d:.1f} niższa (twardszy stolec), n={n}",
+                    "en": "With tag {tag} the average scale is {d:.1f} lower (harder stool), n={n}"},
+    "ins_opt_down": {"pl": "% optymalnych spadło o {d:.0f} pp vs poprzedni tydzień",
+                     "en": "% optimal dropped by {d:.0f} pp vs previous week"},
+    "ins_opt_up": {"pl": "% optymalnych wzrosło o {d:.0f} pp vs poprzedni tydzień",
+                   "en": "% optimal rose by {d:.0f} pp vs previous week"},
+    "ins_avg_up": {"pl": "Średnia skala wzrosła o {d:.1f} vs poprzedni tydzień (luźniej)",
+                   "en": "Average scale rose by {d:.1f} vs previous week (looser)"},
+    "ins_avg_down": {"pl": "Średnia skala spadła o {d:.1f} vs poprzedni tydzień (twardziej)",
+                     "en": "Average scale fell by {d:.1f} vs previous week (harder)"},
+    "ins_weekday_high": {"pl": "W {day} średnia skala jest o {d:.1f} wyższa niż ogółem",
+                         "en": "On {day} the average scale is {d:.1f} higher than overall"},
+    "ins_weekday_low": {"pl": "W {day} średnia skala jest o {d:.1f} niższa niż ogółem",
+                        "en": "On {day} the average scale is {d:.1f} lower than overall"},
+    "ins_episodes": {"pl": "Wykryto epizody biegunki: {n} w wybranym zakresie",
+                     "en": "Diarrhea episodes detected: {n} in the selected range"},
+    "ins_gap": {"pl": "Od ostatniego wpisu minęło {gap} — możliwe zaparcie",
+                "en": "Last entry was {gap} ago — possible constipation"},
+    "ins_extremes": {"pl": "Wpisy skrajne (1–2, 6–7) stanowią {p:.0f}% wpisów",
+                     "en": "Extreme entries (1–2, 6–7) make up {p:.0f}% of entries"},
+    "pdf_weekday": {"pl": "Rytm tygodnia", "en": "Weekday rhythm"},
+    "pdf_weekday_headers": {"pl": ["Dzień tygodnia", "Wpisy", "Śr. skala"],
+                            "en": ["Weekday", "Entries", "Avg scale"]},
+    "pdf_week_compare": {"pl": "Tydzień vs poprzedni tydzień", "en": "This week vs previous week"},
+    "pdf_week_headers": {"pl": ["Okres", "Wpisy", "Średnia", "% optymalnych"],
+                         "en": ["Period", "Entries", "Average", "% optimal"]},
+    "pdf_prev_week": {"pl": "Poprzednie 7 dni", "en": "Previous 7 days"},
+    "chart_timeline": {"pl": "Oś czasu epizodów i przerw", "en": "Timeline of episodes and gaps"},
+    "timeline_diarrhea": {"pl": "Biegunka", "en": "Diarrhea"},
+    "timeline_gaps": {"pl": "Przerwy ≥3 dni", "en": "Gaps ≥3 days"},
+    "pairs_title": {"pl": "Współwystępowanie tagów:", "en": "Tag co-occurrence:"},
+    "pair_line": {"pl": "{a} + {b}: {n}×", "en": "{a} + {b}: {n}×"},
+    "pairs_none": {"pl": "Brak wpisów z co najmniej dwoma tagami.",
+                   "en": "No entries with at least two tags."},
+    "pdf_pairs": {"pl": "Współwystępowanie tagów", "en": "Tag co-occurrence"},
+    "pdf_pairs_headers": {"pl": ["Para tagów", "Razem"], "en": ["Tag pair", "Together"]},
     "daypart_line": {"pl": "{name}: {count} wpisów, śr. skala {avg}",
                      "en": "{name}: {count} entries, avg scale {avg}"},
     "daypart_empty": {"pl": "{name}: brak wpisów", "en": "{name}: no entries"},
@@ -230,15 +280,18 @@ TAG_EN = {
 }
 BRISTOL_DESC = {
     1: {"pl": "Oddzielne zbite grudki podobne do orzechów, trudne do wydalenia",
-        "en": "Separate hard lumps, nut-like, difficult to pass"},
-    2: {"pl": "Stolec o wydłużonym kształcie, grudkowaty", "en": "Elongated, lumpy stool"},
-    3: {"pl": "Stolec wydłużony, z pęknięciami na powierzchni", "en": "Elongated stool with cracks on the surface"},
-    4: {"pl": "Smukłe, wężowate kawałki stolca, gładkie i miękkie", "en": "Smooth, soft, snake-like pieces (optimal)"},
+        "en": "Separate hard lumps, like nuts (difficult to pass)"},
+    2: {"pl": "Stolec o wydłużonym kształcie, grudkowaty", "en": "Sausage-shaped, but lumpy"},
+    3: {"pl": "Stolec wydłużony, z pęknięciami na powierzchni",
+        "en": "Like a sausage but with cracks on its surface"},
+    4: {"pl": "Smukłe, wężowate kawałki stolca, gładkie i miękkie",
+        "en": "Like a sausage or snake, smooth and soft (average stool)"},
     5: {"pl": "Miękkie drobiny z wyraźnymi krawędziami (łatwo wydalane)",
-        "en": "Soft small pieces with clear edges (easy to pass)"},
+        "en": "Soft blobs with clear cut edges"},
     6: {"pl": "Stolec papkowaty, kłaczaste kawałki z postrzępionymi krawędziami",
-        "en": "Mushy stool, fluffy pieces with ragged edges"},
-    7: {"pl": "Wodnisty, bez stałych elementów (ciecz)", "en": "Watery, no solid pieces (liquid)"},
+        "en": "Fluffy pieces with ragged edges, a mushy stool (diarrhoea)"},
+    7: {"pl": "Wodnisty, bez stałych elementów (ciecz)",
+        "en": "Watery, no solid pieces, entirely liquid (diarrhoea)"},
 }
 MONTHS = {
     "pl": ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec",
@@ -248,6 +301,11 @@ MONTHS = {
 }
 WEEKDAYS = {"pl": ["Pn", "Wt", "Śr", "Cz", "Pt", "So", "Nd"],
             "en": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]}
+WEEKDAYS_FULL = {"pl": ["poniedziałek", "wtorek", "środę", "czwartek", "piątek", "sobotę", "niedzielę"],
+                 "en": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]}
+INS_COLORS = {"red": ("#c0392b", "#e74c3c"), "green": ("#1e7e34", "#2fa572"),
+              "orange": ("#b26a00", "#e67e22"), "blue": ("#1a6ea8", "#5dade2"),
+              "gray": ("gray40", "gray60")}
 
 
 def tr(key):
@@ -331,9 +389,9 @@ def correlate_tags(samples):
     return stats
 
 
-def detect_events(samples):
-    """samples: posortowana lista (datetime, skala). Zwraca (dt, rodzaj, opis)."""
-    events = []
+def detect_spans(samples):
+    """samples: posortowana lista (datetime, skala). Zwraca (start, end, rodzaj)."""
+    spans = []
     high = [dt for dt, s in samples if s >= 6]
     windows = []
     for i in range(len(high)):
@@ -349,17 +407,65 @@ def detect_events(samples):
         else:
             merged.append([a, b])
     for a, b in merged:
-        events.append((high[a], "diarrhea",
-                       tr("event_diarrhea").format(n=b - a + 1,
-                                                   start=f"{high[a]:%d.%m %H:%M}",
-                                                   end=f"{high[b]:%d.%m %H:%M}")))
+        spans.append((high[a], high[b], "diarrhea"))
     for a, b in zip(samples, samples[1:]):
-        gap_h = (b[0] - a[0]).total_seconds() / 3600
-        if gap_h >= 72:
-            events.append((a[0], "gap",
+        if (b[0] - a[0]).total_seconds() / 3600 >= 72:
+            spans.append((a[0], b[0], "gap"))
+    return spans
+
+
+def detect_events(samples):
+    """samples: posortowana lista (datetime, skala). Zwraca (dt, rodzaj, opis)."""
+    events = []
+    for start, end, kind in detect_spans(samples):
+        if kind == "diarrhea":
+            n = sum(1 for dt, s in samples if s >= 6 and start <= dt <= end)
+            events.append((start, "diarrhea",
+                           tr("event_diarrhea").format(n=n,
+                                                       start=f"{start:%d.%m %H:%M}",
+                                                       end=f"{end:%d.%m %H:%M}")))
+        else:
+            gap_h = (end - start).total_seconds() / 3600
+            events.append((start, "gap",
                            tr("event_gap").format(gap=fmt_gap(gap_h),
-                                                  start=f"{a[0]:%d.%m}", end=f"{b[0]:%d.%m}")))
+                                                  start=f"{start:%d.%m}", end=f"{end:%d.%m}")))
     return events
+
+
+def tag_pairs(samples):
+    """samples: (dt, scale, tags). Liczniki par tagów w tym samym wpisie, malejąco."""
+    counts = Counter()
+    for _, _, tags in samples:
+        ts = sorted(tags)
+        for i in range(len(ts)):
+            for j in range(i + 1, len(ts)):
+                counts[(ts[i], ts[j])] += 1
+    return counts.most_common()
+
+
+def draw_timeline(ax, samples, start, end):
+    """Oś czasu: epizody biegunki i przerwy >=3 dni jako paski na osi dat."""
+    ax.clear()
+    spans = detect_spans([(dt, s) for dt, s, *_ in samples])
+    if spans:
+        for s_dt, e_dt, kind in spans:
+            x0 = mdates.date2num(s_dt)
+            width = max(mdates.date2num(e_dt) - x0, 0.25)
+            y = 1 if kind == "diarrhea" else 0
+            ax.broken_barh([(x0, width)], (y - 0.2, 0.4),
+                           facecolors="#c0392b" if kind == "diarrhea" else "#e67e22")
+    else:
+        ax.text(0.5, 0.5, tr("no_episodes"), ha="center", va="center",
+                fontsize=8, transform=ax.transAxes)
+    ax.set_xlim(mdates.date2num(start), mdates.date2num(end) + 1)
+    ax.set_ylim(-0.5, 1.5)
+    ax.set_yticks([0, 1])
+    ax.set_yticklabels([tr("timeline_gaps"), tr("timeline_diarrhea")], fontsize=7)
+    span_days = (end - start).days + 1
+    ax.xaxis.set_major_locator(mdates.DayLocator(interval=max(1, span_days // 8)))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%d.%m"))
+    ax.tick_params(axis="x", labelsize=6, rotation=90)
+    ax.set_title(tr("chart_timeline"), fontsize=9)
 
 
 def daypart_stats(samples):
@@ -369,6 +475,80 @@ def daypart_stats(samples):
     for name, hours in parts:
         scales = [s for dt, s in samples if dt.hour in hours]
         out.append((name, len(scales), sum(scales) / len(scales) if scales else 0))
+    return out
+
+
+def moving_average_series(samples, start, days):
+    """samples: (dt, scale, ...). Średnia z okna 7 dni dla każdego dnia zakresu."""
+    by_day = {}
+    for dt, s, *_ in samples:
+        by_day.setdefault(dt.date(), []).append(s)
+    out = []
+    for i in range(days):
+        d = start + timedelta(days=i)
+        window = [s for dd, ss in by_day.items() if d - timedelta(days=6) <= dd <= d for s in ss]
+        if window:
+            out.append((d, sum(window) / len(window)))
+    return out
+
+
+def weekday_stats(samples):
+    out = []
+    for wd in range(7):
+        ss = [s for dt, s, *_ in samples if dt.weekday() == wd]
+        out.append((wd, len(ss), sum(ss) / len(ss) if ss else None))
+    return out
+
+
+def build_insights(samples, last_dt):
+    """samples: (dt, scale, tags). Regułowe obserwacje jako (tekst, kolor)."""
+    if not samples:
+        return [(tr("ins_none"), "gray")]
+    out = []
+    today = datetime.now().date()
+    scales = [s for _, s, _ in samples]
+    overall = sum(scales) / len(scales)
+    last7 = [s for dt, s, _ in samples if dt.date() >= today - timedelta(days=6)]
+    prev7 = [s for dt, s, _ in samples
+             if today - timedelta(days=13) <= dt.date() <= today - timedelta(days=7)]
+    if last7 and prev7:
+        o1 = 100 * sum(1 for s in last7 if s in (3, 4)) / len(last7)
+        o0 = 100 * sum(1 for s in prev7 if s in (3, 4)) / len(prev7)
+        d = o1 - o0
+        if d <= -5:
+            out.append((tr("ins_opt_down").format(d=-d), "red"))
+        elif d >= 5:
+            out.append((tr("ins_opt_up").format(d=d), "green"))
+        a1, a0 = sum(last7) / len(last7), sum(prev7) / len(prev7)
+        if a1 - a0 >= 0.5:
+            out.append((tr("ins_avg_up").format(d=a1 - a0), "red"))
+        elif a0 - a1 >= 0.5:
+            out.append((tr("ins_avg_down").format(d=a0 - a1), "green"))
+    for tag, n, aw, ao, delta in correlate_tags([(s, t) for _, s, t in samples]):
+        if n >= 3 and delta is not None and abs(delta) >= 0.5:
+            key = "ins_tag_high" if delta > 0 else "ins_tag_low"
+            out.append((tr(key).format(tag=tag_label(tag), d=abs(delta), n=n),
+                        "red" if delta > 0 else "blue"))
+    wd = [w for w in weekday_stats(samples) if w[1] >= 3 and w[2] is not None]
+    best = max(wd, key=lambda w: abs(w[2] - overall), default=None)
+    if best is not None and abs(best[2] - overall) >= 0.7:
+        d = best[2] - overall
+        key = "ins_weekday_high" if d > 0 else "ins_weekday_low"
+        out.append((tr(key).format(day=WEEKDAYS_FULL[LANG][best[0]], d=abs(d)),
+                    "red" if d > 0 else "blue"))
+    n_ep = sum(1 for _, kind, _ in detect_events([(dt, s) for dt, s, _ in samples])
+               if kind == "diarrhea")
+    if n_ep:
+        out.append((tr("ins_episodes").format(n=n_ep), "red"))
+    if last_dt is not None:
+        gap_h = (datetime.now() - last_dt).total_seconds() / 3600
+        if gap_h >= 72:
+            out.append((tr("ins_gap").format(gap=fmt_gap(gap_h)), "orange"))
+    ext = 100 * sum(1 for s in scales if s <= 2 or s >= 6) / len(scales)
+    if ext >= 40:
+        out.append((tr("ins_extremes").format(p=ext), "orange"))
+    if not out:
+        out.append((tr("ins_none"), "gray"))
     return out
 
 
@@ -1017,9 +1197,11 @@ class BMReporter(ctk.CTk):
                           command=lambda _: self.refresh_charts(), width=100).pack(side="left", padx=5)
         ctk.CTkButton(controls, text=tr("refresh"), width=80, command=self.refresh_charts).pack(side="left", padx=5)
 
-        self.fig = Figure(figsize=(5.6, 6.2), dpi=100, constrained_layout=True)
-        self.ax_daily = self.fig.add_subplot(2, 1, 1)
-        self.ax_dist = self.fig.add_subplot(2, 1, 2)
+        self.fig = Figure(figsize=(5.6, 6.4), dpi=100, constrained_layout=True)
+        self.ax_daily = self.fig.add_subplot(2, 2, 1)
+        self.ax_dist = self.fig.add_subplot(2, 2, 2)
+        self.ax_avg = self.fig.add_subplot(2, 2, 3)
+        self.ax_corr = self.fig.add_subplot(2, 2, 4)
 
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.tab_charts)
         self.canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=10)
@@ -1035,33 +1217,88 @@ class BMReporter(ctk.CTk):
 
         daily_counts = Counter()
         scale_counts = Counter()
+        daily_scales = {}
+        samples = []
         for row in self.read_entries():
             try:
-                entry_date = datetime.strptime(row[0], DATE_FMT).date()
+                dt = datetime.strptime(row[0] + " " + row[1], DATE_FMT + " " + TIME_FMT)
                 scale = int(row[2])
             except ValueError:
                 continue
-            if start <= entry_date <= today:
-                daily_counts[entry_date] += 1
+            if start <= dt.date() <= today:
+                daily_counts[dt.date()] += 1
                 scale_counts[scale] += 1
+                daily_scales.setdefault(dt.date(), []).append(scale)
+                samples.append((dt, scale, set(parse_tags(row))))
+        samples.sort(key=lambda x: x[0])
+
+        episode_days = set()
+        for dt, kind, _ in detect_events([(dt, s) for dt, s, _ in samples]):
+            if kind == "diarrhea":
+                end = (dt + timedelta(hours=24)).date()
+                d = dt.date()
+                while d <= end:
+                    episode_days.add(d)
+                    d += timedelta(days=1)
 
         dates = [start + timedelta(days=i) for i in range(days)]
         counts = [daily_counts.get(d, 0) for d in dates]
 
         self.ax_daily.clear()
-        self.ax_daily.bar([d.strftime("%d.%m") for d in dates], counts, color="#3b8ed0")
-        self.ax_daily.set_title(tr("chart_daily").format(days=days))
+        self.ax_daily.bar([d.strftime("%d.%m") for d in dates], counts,
+                          color=["#c0392b" if d in episode_days else "#3b8ed0" for d in dates])
+        self.ax_daily.set_title(tr("chart_daily").format(days=days), fontsize=9)
         self.ax_daily.set_ylabel(tr("entries_axis"))
         self.ax_daily.yaxis.set_major_locator(mticker.MaxNLocator(integer=True))
-        self.ax_daily.tick_params(axis="x", rotation=90, labelsize=7)
+        step = max(1, days // 6)
+        self.ax_daily.set_xticks(range(0, days, step))
+        self.ax_daily.set_xticklabels([dates[i].strftime("%d.%m") for i in range(0, days, step)],
+                                      rotation=90, fontsize=6)
+        self.ax_daily.legend(handles=[Patch(color="#c0392b", label=tr("episode_day"))],
+                             fontsize=6, loc="upper left")
 
         self.ax_dist.clear()
         self.ax_dist.bar(range(1, 8), [scale_counts.get(i, 0) for i in range(1, 8)], color="#2fa572")
-        self.ax_dist.set_title(tr("chart_dist"))
+        self.ax_dist.set_title(tr("chart_dist"), fontsize=9)
         self.ax_dist.set_xlabel(tr("bristol_axis"))
         self.ax_dist.set_ylabel(tr("entries_axis"))
         self.ax_dist.set_xticks(range(1, 8))
         self.ax_dist.yaxis.set_major_locator(mticker.MaxNLocator(integer=True))
+        self.ax_dist.tick_params(labelsize=7)
+
+        self.ax_avg.clear()
+        avg_days = [d for d in dates if d in daily_scales]
+        avg_vals = [sum(daily_scales[d]) / len(daily_scales[d]) for d in avg_days]
+        self.ax_avg.axhspan(3, 4, color="#2fa572", alpha=0.15)
+        self.ax_avg.plot([d.strftime("%d.%m") for d in avg_days], avg_vals,
+                         marker="o", markersize=3, color="#2fa572")
+        self.ax_avg.set_title(tr("chart_avg"), fontsize=9)
+        self.ax_avg.set_ylabel(tr("bristol_axis"))
+        self.ax_avg.set_ylim(0.5, 7.5)
+        self.ax_avg.set_yticks(range(1, 8))
+        step = max(1, len(avg_days) // 6)
+        self.ax_avg.set_xticks(range(0, len(avg_days), step))
+        self.ax_avg.set_xticklabels([avg_days[i].strftime("%d.%m") for i in range(0, len(avg_days), step)],
+                                    rotation=90, fontsize=6)
+        self.ax_avg.tick_params(axis="y", labelsize=7)
+
+        self.ax_corr.clear()
+        stats = correlate_tags([(s, tags) for _, s, tags in samples])
+        if stats:
+            names = [tag_label(t) for t, _, _, _, _ in stats]
+            deltas = [d if d is not None else 0 for _, _, _, _, d in stats]
+            colors = ["#c0392b" if d >= 0.5 else "#1a6ea8" if d <= -0.5 else "#888888" for d in deltas]
+            self.ax_corr.barh(range(len(stats)), deltas, color=colors)
+            self.ax_corr.set_yticks(range(len(stats)))
+            self.ax_corr.set_yticklabels(names, fontsize=6)
+            self.ax_corr.invert_yaxis()
+            self.ax_corr.axvline(0, color="gray", linewidth=0.8)
+            self.ax_corr.set_xlabel(tr("diff_axis"), fontsize=8)
+            self.ax_corr.tick_params(axis="x", labelsize=7)
+        else:
+            self.ax_corr.text(0.5, 0.5, tr("pdf_no_tags"), ha="center", va="center", fontsize=8)
+            self.ax_corr.set_axis_off()
+        self.ax_corr.set_title(tr("chart_corr"), fontsize=9)
 
         self.canvas.draw()
 
@@ -1152,8 +1389,12 @@ class BMReporter(ctk.CTk):
                           command=lambda _: self.refresh_analysis(), width=110).pack(side="left", padx=5)
         ctk.CTkButton(controls, text=tr("refresh"), width=80, command=self.refresh_analysis).pack(side="left", padx=5)
 
-        self.reg_frame = ctk.CTkFrame(self.tab_analysis, fg_color=("#f0f0f0", "#2b2b2b"))
-        self.reg_frame.pack(pady=(8, 0), padx=10, fill="x")
+        self.analysis_scroll = ctk.CTkScrollableFrame(self.tab_analysis)
+        self.analysis_scroll.pack(pady=(6, 10), padx=10, fill="both", expand=True)
+        parent = self.analysis_scroll
+
+        self.reg_frame = ctk.CTkFrame(parent, fg_color=("#f0f0f0", "#2b2b2b"))
+        self.reg_frame.pack(pady=(8, 0), padx=5, fill="x")
         self.reg_vars = {}
         self.reg_lbls = {}
         for col, (key, label) in enumerate([("median", tr("median_gap")),
@@ -1171,20 +1412,39 @@ class BMReporter(ctk.CTk):
             self.analysis_fig = Figure(figsize=(5.6, 2.3), dpi=100, constrained_layout=True)
             self.ax_hours = self.analysis_fig.add_subplot(1, 2, 1)
             self.ax_daypart = self.analysis_fig.add_subplot(1, 2, 2)
-            self.analysis_canvas = FigureCanvasTkAgg(self.analysis_fig, master=self.tab_analysis)
-            self.analysis_canvas.get_tk_widget().pack(fill="x", padx=10, pady=(8, 0))
+            self.analysis_canvas = FigureCanvasTkAgg(self.analysis_fig, master=parent)
+            self.analysis_canvas.get_tk_widget().pack(fill="x", padx=5, pady=(8, 0))
+            self.analysis_fig2 = Figure(figsize=(5.6, 2.3), dpi=100, constrained_layout=True)
+            self.ax_trend = self.analysis_fig2.add_subplot(1, 2, 1)
+            self.ax_weekday = self.analysis_fig2.add_subplot(1, 2, 2)
+            self.analysis_canvas2 = FigureCanvasTkAgg(self.analysis_fig2, master=parent)
+            self.analysis_canvas2.get_tk_widget().pack(fill="x", padx=5, pady=(8, 0))
+            self.analysis_fig3 = Figure(figsize=(5.6, 1.7), dpi=100, constrained_layout=True)
+            self.ax_timeline = self.analysis_fig3.add_subplot(1, 1, 1)
+            self.analysis_canvas3 = FigureCanvasTkAgg(self.analysis_fig3, master=parent)
+            self.analysis_canvas3.get_tk_widget().pack(fill="x", padx=5, pady=(8, 0))
         else:
-            self.daypart_frame = ctk.CTkFrame(self.tab_analysis, fg_color="transparent")
-            self.daypart_frame.pack(fill="x", padx=15, pady=(8, 0))
+            self.daypart_frame = ctk.CTkFrame(parent, fg_color="transparent")
+            self.daypart_frame.pack(fill="x", padx=10, pady=(8, 0))
 
-        ctk.CTkLabel(self.tab_analysis, text=tr("detected_episodes"), font=ctk.CTkFont(weight="bold")
-                     ).pack(anchor="w", padx=15, pady=(8, 0))
-        self.episodes_scroll = ctk.CTkScrollableFrame(self.tab_analysis, width=540, height=180)
-        self.episodes_scroll.pack(pady=(4, 10), padx=10, fill="both", expand=True)
+        ctk.CTkLabel(parent, text=tr("insights_title"), font=ctk.CTkFont(weight="bold")
+                     ).pack(anchor="w", padx=10, pady=(8, 0))
+        self.insights_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        self.insights_frame.pack(fill="x", padx=10)
+
+        ctk.CTkLabel(parent, text=tr("pairs_title"), font=ctk.CTkFont(weight="bold")
+                     ).pack(anchor="w", padx=10, pady=(8, 0))
+        self.pairs_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        self.pairs_frame.pack(fill="x", padx=10)
+
+        ctk.CTkLabel(parent, text=tr("detected_episodes"), font=ctk.CTkFont(weight="bold")
+                     ).pack(anchor="w", padx=10, pady=(8, 0))
+        self.episodes_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        self.episodes_frame.pack(fill="x", padx=10, pady=(4, 10))
         self.refresh_analysis()
 
     def refresh_analysis(self):
-        if not hasattr(self, "episodes_scroll"):
+        if not hasattr(self, "episodes_frame"):
             return
 
         range_val = self.analysis_range_var.get()
@@ -1204,7 +1464,7 @@ class BMReporter(ctk.CTk):
             if last_dt is None or dt > last_dt:
                 last_dt = dt
             if cutoff is None or dt.date() >= cutoff:
-                samples.append((dt, scale))
+                samples.append((dt, scale, set(parse_tags(row))))
         samples.sort(key=lambda x: x[0])
 
         gaps = [(b[0] - a[0]).total_seconds() / 3600 for a, b in zip(samples, samples[1:])]
@@ -1223,21 +1483,39 @@ class BMReporter(ctk.CTk):
             self.reg_vars["since"].set("---")
 
         events = [(dt, ("#c0392b", "#e74c3c") if kind == "diarrhea" else ("#b26a00", "#e67e22"), text)
-                  for dt, kind, text in detect_events(samples)]
+                  for dt, kind, text in detect_events([(dt, s) for dt, s, _ in samples])]
 
-        for widget in self.episodes_scroll.winfo_children():
+        for widget in self.episodes_frame.winfo_children():
             widget.destroy()
         if events:
             for dt, color, text in sorted(events, key=lambda e: e[0], reverse=True):
-                ctk.CTkLabel(self.episodes_scroll, text=text, text_color=color, justify="left",
+                ctk.CTkLabel(self.episodes_frame, text=text, text_color=color, justify="left",
                              wraplength=500, font=ctk.CTkFont(size=12)).pack(anchor="w", padx=8, pady=3)
         else:
-            ctk.CTkLabel(self.episodes_scroll, text=tr("no_episodes")).pack(pady=15)
+            ctk.CTkLabel(self.episodes_frame, text=tr("no_episodes")).pack(pady=15)
 
-        part_stats = daypart_stats(samples)
+        for widget in self.insights_frame.winfo_children():
+            widget.destroy()
+        for text, kind in build_insights(samples, last_dt):
+            ctk.CTkLabel(self.insights_frame, text=text, text_color=INS_COLORS[kind], justify="left",
+                         wraplength=500, font=ctk.CTkFont(size=11)).pack(anchor="w", pady=1)
+
+        for widget in self.pairs_frame.winfo_children():
+            widget.destroy()
+        pairs = tag_pairs(samples)
+        if pairs:
+            for (a, b), n in pairs[:8]:
+                ctk.CTkLabel(self.pairs_frame,
+                             text=tr("pair_line").format(a=tag_label(a), b=tag_label(b), n=n),
+                             font=ctk.CTkFont(size=11)).pack(anchor="w", pady=1)
+        else:
+            ctk.CTkLabel(self.pairs_frame, text=tr("pairs_none"), text_color=("gray40", "gray60"),
+                         font=ctk.CTkFont(size=11)).pack(anchor="w", pady=1)
+
+        part_stats = daypart_stats([(dt, s) for dt, s, _ in samples])
 
         if MATPLOTLIB_AVAILABLE:
-            hour_counts = Counter(dt.hour for dt, s in samples)
+            hour_counts = Counter(dt.hour for dt, s, _ in samples)
             self.ax_hours.clear()
             self.ax_hours.bar(range(24), [hour_counts.get(h, 0) for h in range(24)], color="#3b8ed0")
             self.ax_hours.set_title(tr("chart_hours"), fontsize=10)
@@ -1251,6 +1529,37 @@ class BMReporter(ctk.CTk):
             self.ax_daypart.set_ylim(0, 7)
             self.ax_daypart.tick_params(labelsize=7)
             self.analysis_canvas.draw()
+
+            today = datetime.now().date()
+            start = cutoff if cutoff is not None else (samples[0][0].date() if samples else today)
+            series = moving_average_series(samples, start, (today - start).days + 1)
+            self.ax_trend.clear()
+            self.ax_trend.axhspan(3, 4, color="#2fa572", alpha=0.15)
+            self.ax_trend.plot([d.strftime("%d.%m") for d, _ in series], [v for _, v in series],
+                               marker="o", markersize=2, color="#3b8ed0")
+            self.ax_trend.set_ylim(0.5, 7.5)
+            self.ax_trend.set_yticks(range(1, 8))
+            step = max(1, len(series) // 6)
+            self.ax_trend.set_xticks(range(0, len(series), step))
+            self.ax_trend.set_xticklabels([series[i][0].strftime("%d.%m") for i in range(0, len(series), step)],
+                                          rotation=90, fontsize=6)
+            self.ax_trend.tick_params(axis="y", labelsize=7)
+            self.ax_trend.set_title(tr("chart_trend"), fontsize=9)
+
+            wd = weekday_stats(samples)
+            self.ax_weekday.clear()
+            vals = [w[2] if w[2] is not None else 0 for w in wd]
+            colors = [heat_colors(w[2])[0][0] if w[2] is not None else "#888888" for w in wd]
+            self.ax_weekday.bar(range(7), vals, color=colors)
+            self.ax_weekday.set_xticks(range(7))
+            self.ax_weekday.set_xticklabels(WEEKDAYS[LANG], fontsize=7)
+            self.ax_weekday.set_ylim(0, 7)
+            self.ax_weekday.set_title(tr("chart_weekday"), fontsize=9)
+            self.ax_weekday.tick_params(axis="y", labelsize=7)
+            self.analysis_canvas2.draw()
+
+            draw_timeline(self.ax_timeline, samples, start, today)
+            self.analysis_canvas3.draw()
         else:
             for widget in self.daypart_frame.winfo_children():
                 widget.destroy()
@@ -1492,6 +1801,9 @@ class BMReporter(ctk.CTk):
 
             heading_style = ParagraphStyle("ReportHeading", fontName=font_bold, fontSize=13,
                                            spaceBefore=14, spaceAfter=6)
+            sub_style = ParagraphStyle("ReportSub", fontName=font_bold, fontSize=11,
+                                       spaceBefore=8, spaceAfter=4)
+            tmp_files = []
 
             def section(text):
                 elements.append(Paragraph(escape(text), heading_style))
@@ -1595,6 +1907,82 @@ class BMReporter(ctk.CTk):
             else:
                 elements.append(Paragraph(tr("pdf_no_events"), normal_style))
 
+            elements.append(Spacer(1, 6))
+            elements.append(Paragraph(escape(tr("pdf_week_compare")), sub_style))
+            week_rows = [tr("pdf_week_headers")]
+            for label, lo, hi in [(tr("range_last7"), today - timedelta(days=6), today),
+                                  (tr("pdf_prev_week"), today - timedelta(days=13), today - timedelta(days=7))]:
+                ss = [s for dt, s, _ in samples if lo <= dt.date() <= hi]
+                if ss:
+                    week_rows.append([label, str(len(ss)), f"{sum(ss) / len(ss):.1f}",
+                                      f"{100 * sum(1 for s in ss if s in (3, 4)) / len(ss):.0f}%"])
+                else:
+                    week_rows.append([label, "0", "---", "---"])
+            elements.append(make_table(week_rows, [150, 80, 100, 138]))
+
+            elements.append(Spacer(1, 6))
+            elements.append(Paragraph(escape(tr("pdf_weekday")), sub_style))
+            wd_rows = [tr("pdf_weekday_headers")]
+            for wd, n, avg in weekday_stats(samples):
+                wd_rows.append([WEEKDAYS_FULL[LANG][wd], str(n), f"{avg:.1f}" if avg is not None else "---"])
+            elements.append(make_table(wd_rows, [150, 150, 168]))
+
+            if MATPLOTLIB_AVAILABLE and samples:
+                elements.append(Spacer(1, 6))
+                elements.append(Paragraph(escape(tr("chart_trend")), sub_style))
+                tfig = Figure(figsize=(6.5, 2.2), dpi=150)
+                tax = tfig.add_subplot(1, 1, 1)
+                start_d = samples[0][0].date()
+                end_d = samples[-1][0].date()
+                series = moving_average_series(samples, start_d, (end_d - start_d).days + 1)
+                tax.axhspan(3, 4, color="#2fa572", alpha=0.15)
+                tax.plot([d.strftime("%d.%m") for d, _ in series], [v for _, v in series],
+                         marker="o", markersize=2, color="#3b8ed0")
+                tax.set_ylim(0.5, 7.5)
+                tax.set_yticks(range(1, 8))
+                step = max(1, len(series) // 10)
+                tax.set_xticks(range(0, len(series), step))
+                tax.set_xticklabels([series[i][0].strftime("%d.%m") for i in range(0, len(series), step)],
+                                    rotation=90, fontsize=6)
+                tax.tick_params(labelsize=7)
+                tfig.tight_layout()
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tf:
+                    tmp_files.append(tf.name)
+                tfig.savefig(tmp_files[-1])
+                elements.append(RLImage(tmp_files[-1], width=468, height=158))
+
+            elements.append(Spacer(1, 6))
+            elements.append(Paragraph(escape(tr("insights_title")), sub_style))
+            ins_colors = {"red": "#c0392b", "green": "#1e7e34", "orange": "#b26a00",
+                          "blue": "#1a6ea8", "gray": "#666666"}
+            for text, kind in build_insights(samples, samples[-1][0] if samples else None):
+                ins_style = ParagraphStyle("Insight", parent=normal_style,
+                                           textColor=colors.HexColor(ins_colors[kind]))
+                elements.append(Paragraph(escape(text), ins_style))
+
+            elements.append(Spacer(1, 6))
+            elements.append(Paragraph(escape(tr("pdf_pairs")), sub_style))
+            pairs = tag_pairs(samples)
+            if pairs:
+                pair_rows = [tr("pdf_pairs_headers")]
+                for (a, b), n in pairs[:10]:
+                    pair_rows.append([f"{tag_label(a)} + {tag_label(b)}", str(n)])
+                elements.append(make_table(pair_rows, [368, 100]))
+            else:
+                elements.append(Paragraph(tr("pairs_none"), normal_style))
+
+            if MATPLOTLIB_AVAILABLE and samples:
+                elements.append(Spacer(1, 6))
+                elements.append(Paragraph(escape(tr("chart_timeline")), sub_style))
+                tlfig = Figure(figsize=(6.5, 1.8), dpi=150)
+                tlax = tlfig.add_subplot(1, 1, 1)
+                draw_timeline(tlax, samples, samples[0][0].date(), samples[-1][0].date())
+                tlfig.tight_layout()
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tf:
+                    tmp_files.append(tf.name)
+                tlfig.savefig(tmp_files[-1])
+                elements.append(RLImage(tmp_files[-1], width=468, height=125))
+
             section(tr("pdf_calendar"))
             elements.append(Paragraph(tr("pdf_cal_legend"), normal_style))
             months = {}
@@ -1638,6 +2026,11 @@ class BMReporter(ctk.CTk):
                 cal_table.setStyle(TableStyle(cmds))
                 elements.append(cal_table)
             doc.build(elements)
+            for p in tmp_files:
+                try:
+                    os.unlink(p)
+                except OSError:
+                    pass
 
             messagebox.showinfo(tr("success"), tr("pdf_done").format(path=filename_pdf))
         except Exception as e:

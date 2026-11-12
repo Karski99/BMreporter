@@ -9,3 +9,7 @@ dist/
 __pycache__/
 *.exe
 *.pyc
+
+# Lokalne narzędzia i artefakty
+.qoder/
+*.xmind
